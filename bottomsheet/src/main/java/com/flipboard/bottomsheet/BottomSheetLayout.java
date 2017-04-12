@@ -6,6 +6,7 @@ import android.animation.ObjectAnimator;
 import android.animation.TimeInterpolator;
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -78,6 +79,8 @@ public class BottomSheetLayout extends FrameLayout {
 
     private static final long ANIMATION_DURATION = 300;
 
+    private long animationDuration;
+
     private Rect contentClipRect = new Rect();
     private State state = State.HIDDEN;
     private boolean peekOnDismiss = false;
@@ -102,6 +105,7 @@ public class BottomSheetLayout extends FrameLayout {
     private boolean hasIntercepted;
     private float peekKeyline;
     private float peek;
+    private boolean fromTop = true;
 
     /** Some values we need to manage width on tablets */
     private int screenWidth = 0;
@@ -133,6 +137,22 @@ public class BottomSheetLayout extends FrameLayout {
 
     public BottomSheetLayout(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        TypedArray a = context.getTheme().obtainStyledAttributes(
+                attrs,
+                R.styleable.BottomSheet,
+                0, 0);
+
+        try {
+            fromTop = a.getBoolean(R.styleable.BottomSheet_bottomsheet_fromTop, false);
+            try {
+                animationDuration = Long.parseLong(a.getString(R.styleable.BottomSheet_bottomsheet_animationDuration));
+                if (animationDuration <= 0) animationDuration = ANIMATION_DURATION;
+            } catch (NumberFormatException e) {
+                animationDuration = ANIMATION_DURATION;
+            }
+        } finally {
+            a.recycle();
+        }
         init();
     }
 
@@ -243,9 +263,15 @@ public class BottomSheetLayout extends FrameLayout {
 
     private void setSheetTranslation(float newTranslation) {
         this.sheetTranslation = Math.min(newTranslation, getMaxSheetTranslation());
-        int bottomClip = (int) (getHeight() - Math.ceil(sheetTranslation));
-        this.contentClipRect.set(0, 0, getWidth(), bottomClip);
-        getSheetView().setTranslationY(getHeight() - sheetTranslation);
+        if (fromTop) {
+            getSheetView().setTranslationY(-getSheetView().getHeight() + sheetTranslation);
+            this.contentClipRect.set(0, (int)sheetTranslation, getWidth(), getHeight());
+
+        } else {
+            getSheetView().setTranslationY(getHeight() - sheetTranslation);
+            int bottomClip = (int) (getHeight() - Math.ceil(sheetTranslation));
+            this.contentClipRect.set(0, 0, getWidth(), bottomClip);
+        }
         transformView(sheetTranslation);
         if (shouldDimContentView) {
             float dimAlpha = getDimAlpha(sheetTranslation);
@@ -276,7 +302,9 @@ public class BottomSheetLayout extends FrameLayout {
         if (downAction) {
             hasIntercepted = false;
         }
-        if (interceptContentTouch || (ev.getY() > getHeight() - sheetTranslation && isXInSheet(ev.getX()))) {
+        if (interceptContentTouch ||
+            (!fromTop && ev.getY() > getHeight() - sheetTranslation && isXInSheet(ev.getX())) ||
+            (fromTop && ev.getY() < sheetTranslation && isXInSheet(ev.getX()))) {
             hasIntercepted = downAction && isSheetShowing();
         } else {
             hasIntercepted = false;
@@ -322,7 +350,9 @@ public class BottomSheetLayout extends FrameLayout {
             if (bottomSheetOwnsTouch) {
                 if (state == State.PEEKED) {
                     MotionEvent cancelEvent = MotionEvent.obtain(event);
-                    cancelEvent.offsetLocation(0, sheetTranslation - getHeight());
+                    if (!fromTop) {
+                        cancelEvent.offsetLocation(0, sheetTranslation - getHeight());
+                    }
                     cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
                     getSheetView().dispatchTouchEvent(cancelEvent);
                     cancelEvent.recycle();
@@ -342,7 +372,12 @@ public class BottomSheetLayout extends FrameLayout {
         if (bottomSheetOwnsTouch) {
             // If we are scrolling down and the sheet cannot scroll further, go out of expanded mode.
             boolean scrollingDown = deltaY < 0;
-            boolean canScrollUp = canScrollUp(getSheetView(), event.getX(), event.getY() + (sheetTranslation - getHeight()));
+            boolean canScrollUp;
+            if (!fromTop) {
+                canScrollUp = canScrollUp(getSheetView(), event.getX(), event.getY() + (sheetTranslation - getHeight()));
+            } else {
+                canScrollUp = canScrollUp(getSheetView(), event.getX(), event.getY());
+            }
             if (state == State.EXPANDED && scrollingDown && !canScrollUp) {
                 // Reset variables so deltas are correctly calculated from the point at which the sheet was 'detached' from the top.
                 downY = event.getY();
@@ -375,7 +410,9 @@ public class BottomSheetLayout extends FrameLayout {
 
             if (state == State.EXPANDED) {
                 // Dispatch the touch to the sheet if we are expanded so it can handle its own internal scrolling.
-                event.offsetLocation(0, sheetTranslation - getHeight());
+                if (!fromTop) {
+                    event.offsetLocation(0, sheetTranslation - getHeight());
+                }
                 getSheetView().dispatchTouchEvent(event);
             } else {
                 // Make delta less effective when sheet is below the minimum translation.
@@ -421,13 +458,17 @@ public class BottomSheetLayout extends FrameLayout {
             }
         } else {
             // If the user clicks outside of the bottom sheet area we should dismiss the bottom sheet.
-            boolean touchOutsideBottomSheet = event.getY() < getHeight() - sheetTranslation || !isXInSheet(event.getX());
+            boolean touchOutsideBottomSheet =
+                    (!fromTop && event.getY() < getHeight() - sheetTranslation) ||
+                    (fromTop && event.getY() > sheetTranslation) ||
+                    !isXInSheet(event.getX());
             if (event.getAction() == MotionEvent.ACTION_UP && touchOutsideBottomSheet && interceptContentTouch) {
                 dismissSheet();
                 return true;
             }
-
-            event.offsetLocation(isTablet ? getX() - sheetStartX : 0, sheetTranslation - getHeight());
+            if (!fromTop) {
+                event.offsetLocation(isTablet ? getX() - sheetStartX : 0, sheetTranslation - getHeight());
+            }
             getSheetView().dispatchTouchEvent(event);
         }
         return true;
@@ -506,7 +547,7 @@ public class BottomSheetLayout extends FrameLayout {
         cancelCurrentAnimation();
         setSheetLayerTypeIfEnabled(LAYER_TYPE_NONE);
         ObjectAnimator anim = ObjectAnimator.ofFloat(this, SHEET_TRANSLATION, getMaxSheetTranslation());
-        anim.setDuration(ANIMATION_DURATION);
+        anim.setDuration(animationDuration);
         anim.setInterpolator(animationInterpolator);
         anim.addListener(new CancelDetectionAnimationListener() {
             @Override
@@ -528,7 +569,7 @@ public class BottomSheetLayout extends FrameLayout {
         cancelCurrentAnimation();
         setSheetLayerTypeIfEnabled(LAYER_TYPE_HARDWARE);
         ObjectAnimator anim = ObjectAnimator.ofFloat(this, SHEET_TRANSLATION, getPeekSheetTranslation());
-        anim.setDuration(ANIMATION_DURATION);
+        anim.setDuration(animationDuration);
         anim.setInterpolator(animationInterpolator);
         anim.addListener(new CancelDetectionAnimationListener() {
             @Override
@@ -706,7 +747,7 @@ public class BottomSheetLayout extends FrameLayout {
         sheetView.removeOnLayoutChangeListener(sheetViewOnLayoutChangeListener);
         cancelCurrentAnimation();
         ObjectAnimator anim = ObjectAnimator.ofFloat(this, SHEET_TRANSLATION, 0);
-        anim.setDuration(ANIMATION_DURATION);
+        anim.setDuration(animationDuration);
         anim.setInterpolator(animationInterpolator);
         anim.addListener(new CancelDetectionAnimationListener() {
             @Override
@@ -897,6 +938,22 @@ public class BottomSheetLayout extends FrameLayout {
         } else {
             return context.getResources().getDisplayMetrics().widthPixels;
         }
+    }
+
+    public long getAnimationDuration() {
+        return animationDuration;
+    }
+
+    public void setAnimationDuration(long animationDuration) {
+        this.animationDuration = animationDuration;
+    }
+
+    public boolean isFromTop() {
+        return fromTop;
+    }
+
+    public void setFromTop(boolean fromTop) {
+        this.fromTop = fromTop;
     }
 
     private static <T> T checkNotNull(T value, String message) {

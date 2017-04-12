@@ -26,12 +26,14 @@ public class MenuActivity extends AppCompatActivity {
         findViewById(R.id.list_button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                bottomSheetLayout.setFromTop(true);
                 showMenuSheet(MenuSheetView.MenuType.LIST);
             }
         });
         findViewById(R.id.grid_button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                bottomSheetLayout.setFromTop(false);
                 showMenuSheet(MenuSheetView.MenuType.GRID);
             }
         });
