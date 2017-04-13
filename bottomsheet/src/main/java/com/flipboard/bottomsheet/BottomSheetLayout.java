@@ -352,6 +352,8 @@ public class BottomSheetLayout extends FrameLayout {
                     MotionEvent cancelEvent = MotionEvent.obtain(event);
                     if (!fromTop) {
                         cancelEvent.offsetLocation(0, sheetTranslation - getHeight());
+                    } else {
+                        cancelEvent.offsetLocation(0, getSheetView().getHeight() - sheetTranslation);
                     }
                     cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
                     getSheetView().dispatchTouchEvent(cancelEvent);
@@ -417,6 +419,8 @@ public class BottomSheetLayout extends FrameLayout {
                 // Dispatch the touch to the sheet if we are expanded so it can handle its own internal scrolling.
                 if (!fromTop) {
                     event.offsetLocation(0, sheetTranslation - getHeight());
+                } else {
+                    event.offsetLocation(0, getSheetView().getHeight() - sheetTranslation);
                 }
                 getSheetView().dispatchTouchEvent(event);
             } else {
@@ -473,6 +477,8 @@ public class BottomSheetLayout extends FrameLayout {
             }
             if (!fromTop) {
                 event.offsetLocation(isTablet ? getX() - sheetStartX : 0, sheetTranslation - getHeight());
+            } else {
+                event.offsetLocation(isTablet ? getX() - sheetStartX : 0, getSheetView().getHeight() - sheetTranslation);
             }
             getSheetView().dispatchTouchEvent(event);
         }
