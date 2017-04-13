@@ -367,11 +367,16 @@ public class BottomSheetLayout extends FrameLayout {
         }
 
         // This is not the actual new sheet translation but a first approximation it will be adjusted to account for max and min translations etc.
-        float newSheetTranslation = downSheetTranslation + deltaY;
+        float newSheetTranslation;
+        if (fromTop) {
+            newSheetTranslation = downSheetTranslation - deltaY;
+        } else {
+            newSheetTranslation = downSheetTranslation + deltaY;
+        }
 
         if (bottomSheetOwnsTouch) {
             // If we are scrolling down and the sheet cannot scroll further, go out of expanded mode.
-            boolean scrollingDown = deltaY < 0;
+            boolean scrollingDown = fromTop ? deltaY > 0 : deltaY < 0;
             boolean canScrollUp;
             if (!fromTop) {
                 canScrollUp = canScrollUp(getSheetView(), event.getX(), event.getY() + (sheetTranslation - getHeight()));
