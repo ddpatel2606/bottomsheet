@@ -162,6 +162,10 @@ public class BottomSheetLayout extends FrameLayout {
         init();
     }
 
+    public void setPeekKeyline(float peekKeyline) {
+        this.peekKeyline = peekKeyline;
+    }
+
     private void init() {
         ViewConfiguration viewConfiguration = ViewConfiguration.get(getContext());
         minFlingVelocity = viewConfiguration.getScaledMinimumFlingVelocity();
